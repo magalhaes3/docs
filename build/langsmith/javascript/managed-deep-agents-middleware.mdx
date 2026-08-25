@@ -1,0 +1,133 @@
+---
+title: Add custom middleware to Managed Deep Agents
+sidebarTitle: Middleware
+description: Add built-in or custom middleware to Managed Deep Agents projects.
+---
+
+import ManagedDeepAgentsPrivateBetaNote from '/snippets/javascript/langsmith/managed-deep-agents-private-beta-note.mdx';
+import ManagedDeepAgentsTestAndDeploy from '/snippets/javascript/langsmith/managed-deep-agents-test-and-deploy.mdx';
+
+Middleware gives you more control over what happens inside your agent. During each run, middleware can control behavior at the points shown below: around the overall agent, model calls, and tool calls.
+
+<img
+    src="/oss/images/middleware_final.png"
+    alt="Middleware hooks around the agent lifecycle, model calls, and tool calls"
+    style={{height: "300px", width: "auto", justifyContent: "center"}}
+    className="rounded-lg mx-auto"
+/>
+
+Middleware is useful when a behavior should apply consistently across the whole agent instead of being repeated in the agent's instructions or every tool. For example, middleware can:
+
+- Track agent behavior with logging and analytics.
+- Change prompts, tool selection, or output formatting.
+- Retry failed calls or fall back to another model.
+- Apply rate limits, guardrails, or sensitive data redaction.
+
+Prebuilt middleware is ready-to-use behavior that LangChain provides for common needs, such as sensitive data redaction and model call limits. If those options do not cover your use case, custom middleware lets you run your own logic at the same points in agent execution.
+
+<ManagedDeepAgentsPrivateBetaNote />
+
+## Project structure
+
+Keep the agent entry point at the project root and custom middleware under `middleware/`:
+
+
+
+```text
+my-agent/
+  agent.ts
+  middleware/
+    audit.ts
+```
+
+
+The managed runtime still owns `backend`, `store`, `checkpointer`, `memory`, `skills`, and the system prompt. Middleware should focus on agent behavior around model calls, tool calls, and lifecycle hooks.
+
+For deeper hook, state, and context details, see [custom middleware](/oss/javascript/langchain/middleware/custom).
+
+## Use prebuilt middleware
+
+You can use LangChain [prebuilt middleware](/oss/javascript/langchain/middleware/built-in) directly in the agent definition.
+
+
+
+```ts agent.ts
+import { defineDeepAgent } from "managed-deepagents";
+import { modelCallLimitMiddleware, piiMiddleware } from "langchain";
+
+export const agent = defineDeepAgent({
+  name: "support-agent",
+  model: "openai:gpt-5.5",
+  middleware: [
+    piiMiddleware("email", { strategy: "redact", applyToInput: true }),
+    modelCallLimitMiddleware({ runLimit: 50 }),
+  ],
+});
+```
+
+
+Middleware is the right place for cross-cutting behavior such as PII handling, rate limits, retry policies, model fallbacks, dynamic model selection, and tool-call monitoring.
+
+
+## Add a custom middleware module
+
+For a more advanced option, you can also define [custom middleware](/oss/javascript/langchain/middleware/custom).
+
+
+
+```ts middleware/audit.ts
+import { createMiddleware } from "langchain";
+
+export const logToolCalls = createMiddleware({
+  name: "LogToolCalls",
+  wrapToolCall: async (request, handler) => {
+    console.log(`Calling tool: ${request.toolCall.name}`);
+    const result = await handler(request);
+    console.log(`Finished tool: ${request.toolCall.name}`);
+    return result;
+  },
+});
+```
+
+
+
+Import the middleware into the project-root agent entry and pass it in the `middleware` list.
+
+
+
+```ts agent.ts
+import { defineDeepAgent } from "managed-deepagents";
+
+import { logToolCalls } from "./middleware/audit";
+
+export const agent = defineDeepAgent({
+  name: "support-agent",
+  model: "openai:gpt-5.5",
+  middleware: [logToolCalls],
+});
+```
+
+
+`mda dev` and `mda deploy` copy the project files into the compiled build.
+
+
+
+Your middleware imports should work the same way they do in a normal local TypeScript project.
+
+
+## Use runtime context
+
+Middleware can read per-run context through the normal LangChain runtime APIs. Use context for user IDs, organization IDs, feature flags, request metadata, or credentials that should not be part of the model prompt by default.
+
+For examples, see [Custom middleware](/oss/javascript/langchain/middleware/custom).
+
+---
+
+<div className="source-links">
+<Callout icon="terminal-2">
+    [Connect these docs](/use-these-docs) to Claude, VSCode, and more via MCP for real-time answers.
+</Callout>
+<Callout icon="edit">
+    [Edit this page on GitHub](https://github.com/langchain-ai/docs/edit/main/src/langsmith/managed-deep-agents-middleware.mdx) or [file an issue](https://github.com/langchain-ai/docs/issues/new/choose).
+</Callout>
+</div>
